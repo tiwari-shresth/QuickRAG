@@ -66,8 +66,8 @@ pip install -r requirements.txt
 ```
 
 ### Create a .env file in the root directory and add your credentials:
-PINECONE_API_KEY=your_pinecone_key_here
-MISTRAL_API_KEY=your_mistral_key_here
+* PINECONE_API_KEY=your_pinecone_key_here
+* MISTRAL_API_KEY=your_mistral_key_here
 
 ### Run the FastAPI production server locally:
 * python main.py
