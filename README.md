@@ -26,18 +26,32 @@ QuickRAG solves this by building a coordinated, live cloud RAG pipeline:
 
 The platform is engineered using a **decoupled microservices architecture** to ensure high availability, separate compute workloads, and independent scalability across the RAG pipeline.
 
+[User Web Browser] 
+       │
+       │  (1) Upload Multi-Files or Post Question
+       ▼
+┌───────────────────────────────┐
+│     GRADIO FRONTEND LAYER     │  <-- Hosted on Hugging Face Spaces
+└───────────────────────────────┘
+       │
+       │  (2) Forwards requests via HTTP Rest API
+       ▼
+┌───────────────────────────────┐
+│     FASTAPI BACKEND CORE      │  <-- Compute engine on Render (pypdf, langchain)
+└───────────────────────────────┘
+       │                              ▲
+       │ (3) Upserts Vector Arrays     │ (4) Retrieves Top-K Relevant Context
+       ▼                              │
+┌───────────────────────────────┐     │
+│   PINECONE CLOUD DATA STORE   │─────┘  <-- Serverless Similarity Matching
+└───────────────────────────────┘
+       │
+       │  (5) Feeds Clean Context to LLM
+       ▼
+┌───────────────────────────────┐
+│       MISTRAL AI ENGINE       │  <-- Outputs exact context-grounded response
+└───────────────────────────────┘
 
-┌────────────────────────┐      File Stream      ┌─────────────────────────┐
-│     Client Layer       │──────────────────────>│      Compute Layer      │
-│ (Hugging Face Spaces)  │<──────────────────────│    (FastAPI / Render)   │
-└────────────────────────┘     JSON Response     └─────────────────────────┘
-▲                                                 │
-│                                                 │ Upsert / Query
-│ Direct Chat Stream                              ▼
-│                                    ┌─────────────────────────┐
-└────────────────────────────────────│   Vector Database Core  │
-│    (Pinecone Cloud)     │
-└─────────────────────────┘
 
 * **Frontend UI (Hugging Face Spaces):** Built using **Gradio**, providing an intuitive asynchronous interface for multi-file uploading and interactive message streaming.
 * **Backend API Engine (Render):** Powered by **FastAPI** to manage asynchronous routing, batch multi-part file parsing (`pypdf`), and token-efficient semantic chunking (`langchain-text-splitters`) inside the core RAG pipeline.
