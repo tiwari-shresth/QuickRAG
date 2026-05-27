@@ -3,7 +3,7 @@
 A high-performance, cloud-native Document Intelligence platform that allows users to upload multiple files simultaneously and chat with their unstructured data in real time.
 
 ---
-**🔗 Test it live:** [Interact with QuickRAG on Hugging Face](https://huggingface.co/spaces/shresthtiwari/QuickRAG)
+**🔗 Test it Live:** [Interact with QuickRAG on Hugging Face](https://huggingface.co/spaces/shresthtiwari/QuickRAG)
 
 ## 📌 Executive Summary
 
