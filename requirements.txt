@@ -7,3 +7,4 @@ python-dotenv
 pydantic
 pypdf
 langchain-text-splitters
+python-multipart
