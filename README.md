@@ -26,6 +26,7 @@ QuickRAG solves this by building a coordinated, live cloud RAG pipeline:
 
 The platform is engineered using a **decoupled microservices architecture** to ensure high availability, separate compute workloads, and independent scalability across the RAG pipeline.
 
+```
 [User Web Browser] 
        │
        │  (1) Upload Multi-Files or Post Question
@@ -34,7 +35,7 @@ The platform is engineered using a **decoupled microservices architecture** to e
 │     GRADIO FRONTEND LAYER     │  <-- Hosted on Hugging Face Spaces
 └───────────────────────────────┘
        │
-       │  (2) Forwards requests via HTTP Rest API
+       │  (2) Forwards requests via HTTP REST API
        ▼
 ┌───────────────────────────────┐
 │     FASTAPI BACKEND CORE      │  <-- Compute engine on Render (pypdf, langchain)
@@ -51,6 +52,7 @@ The platform is engineered using a **decoupled microservices architecture** to e
 ┌───────────────────────────────┐
 │       MISTRAL AI ENGINE       │  <-- Outputs exact context-grounded response
 └───────────────────────────────┘
+```
 
 
 * **Frontend UI (Hugging Face Spaces):** Built using **Gradio**, providing an intuitive asynchronous interface for multi-file uploading and interactive message streaming.
