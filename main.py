@@ -110,44 +110,57 @@ import io
 # directly import your text splitter and pinecone vectorstore setup here 
 # (e.g., from langchain_text_splitters import RecursiveCharacterTextSplitter)
 
+from fastapi import UploadFile, File, HTTPException
+from typing import List
+import io
+
 @app.post("/api/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_documents(files: List[UploadFile] = File(...)):
     """
-    Accepts a user-uploaded document, extracts text, chunks it, 
-    and streams vector embeddings directly into the live Pinecone index.
+    Accepts multiple user-uploaded documents, extracts text from all of them,
+    chunks them, and batches them into the live Pinecone index.
     """
     try:
-        # 1. Read file bytes into memory
-        contents = await file.read()
-        text = ""
+        all_chunks = []
+        processed_files = []
 
-        # 2. Extract text based on file type
-        if file.filename.endswith(".txt"):
-            text = contents.decode("utf-8")
-        elif file.filename.endswith(".pdf"):
-            import pypdf
-            pdf_reader = pypdf.PdfReader(io.BytesIO(contents))
-            for page in pdf_reader.pages:
-                text += page.extract_text() or ""
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file format. Please upload .txt or .pdf")
+        for file in files:
+            contents = await file.read()
+            text = ""
 
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="The uploaded file contains no readable text.")
+            # Extract text based on file type
+            if file.filename.endswith(".txt"):
+                text = contents.decode("utf-8")
+            elif file.filename.endswith(".pdf"):
+                import pypdf
+                pdf_reader = pypdf.PdfReader(io.BytesIO(contents))
+                for page in pdf_reader.pages:
+                    text += page.extract_text() or ""
+            else:
+                # Skip files that aren't supported instead of crashing the whole batch
+                continue
 
-        # 3. Chunk the extracted text dynamically
-        # Using the exact configuration from your local ingestion phase
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        chunks = text_splitter.split_text(text)
+            if not text.strip():
+                continue
 
-        # 4. Upsert chunks into your live cloud Pinecone Vectorstore instance
-        # vectorstore.add_texts(chunks) 
+            # Chunk the extracted text dynamically
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            chunks = text_splitter.split_text(text)
+            all_chunks.extend(chunks)
+            processed_files.append(file.filename)
+
+        if not all_chunks:
+            raise HTTPException(status_code=400, detail="No readable text found in any of the uploaded files.")
+
+        # Upsert ALL combined chunks into your live cloud Pinecone Vectorstore instance at once
+        # vectorstore.add_texts(all_chunks)
         
         return {
             "status": "success", 
-            "message": f"Successfully processed {file.filename}.",
-            "chunks_ingested": len(chunks)
+            "message": f"Successfully processed {len(processed_files)} files.",
+            "processed_files": processed_files,
+            "total_chunks_ingested": len(all_chunks)
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Bulk ingestion failed: {str(e)}")
