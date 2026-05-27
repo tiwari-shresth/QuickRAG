@@ -5,7 +5,7 @@ A high-performance, cloud-native Document Intelligence platform that allows user
 ---
 **🔗 Test it Live:** [Interact with QuickRAG on Hugging Face](https://huggingface.co/spaces/shresthtiwari/QuickRAG)
 
-## 📌 Executive Summary
+## Summary
 
 ### What It Is
 QuickRAG is a fully decoupled, modular, end-to-end RAG pipeline. It provides a clean, user-friendly workspace where anyone can drop complex documents and immediately extract insights through an interactive AI chat interface.
