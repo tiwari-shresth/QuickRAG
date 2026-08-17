@@ -132,6 +132,12 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         if not all_chunks:
             raise HTTPException(status_code=400, detail="No readable text found in any of the uploaded files.")
 
+        # Clear previous vectors from Pinecone index so old document contexts are replaced cleanly
+        try:
+            vectorstore.delete(delete_all=True)
+        except Exception as delete_err:
+            print(f"[WARNING] Could not clear previous vectors: {delete_err}")
+
         # Upsert ALL combined chunks into your live cloud Pinecone Vectorstore instance
         vectorstore.add_texts(all_chunks)
         
