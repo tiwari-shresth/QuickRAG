@@ -56,12 +56,18 @@ text_splitter = RecursiveCharacterTextSplitter(
 chunks = text_splitter.split_documents(all_documents)
 print(f"[SPLITTER] Split files into {len(chunks)} total text chunks.")
 
-# 5. INITIALIZE PINECONE BLANK STRUCTURE
+# 5. INITIALIZE PINECONE STRUCTURE & CLEAR OLD VECTROS
 print(f"[EMBEDDING] Connecting to Cloud Pinecone Index: '{index_name}'...")
 vectorstore = PineconeVectorStore(
     index_name=index_name,
     embedding=embedding_model
 )
+
+try:
+    print("[CLEANUP] Purging previous vectors from Pinecone index...")
+    vectorstore.delete(delete_all=True)
+except Exception as e:
+    print(f"[WARNING] Could not clear previous vectors: {e}")
 
 # 6. RATE-LIMIT SAFE UPLOAD: Loop through chunks in small batches
 batch_size = 50  # Smaller batch size to safe-guard Mistral's free rate limits
@@ -82,12 +88,3 @@ for i in range(0, total_chunks, batch_size):
         time.sleep(3)
 
 print("--- Cloud Database successfully built and synchronized safely! ---")
-
-# 1. Clear previous vectors from Pinecone index so old document contexts are replaced cleanly
-try:
-    vectorstore.delete(delete_all=True)
-except Exception as delete_err:
-    print(f"[WARNING] Could not clear previous vectors: {delete_err}")
-
-# 2. Upsert newly uploaded document chunks into clean Pinecone index
-vectorstore.add_texts(all_chunks)
