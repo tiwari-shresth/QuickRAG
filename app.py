@@ -1,125 +1,146 @@
 import streamlit as st
-from dotenv import load_dotenv
 import tempfile
 import os
+from dotenv import load_dotenv
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_mistralai import ChatMistralAI, MistralAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_mistralai import ChatMistralAI
 from langchain_core.prompts import ChatPromptTemplate
-
 
 load_dotenv()
 
-st.set_page_config(page_title="RAG Book Assistant")
+# Clean environment variables defensively
+if os.environ.get("MISTRAL_API_KEY"):
+    os.environ["MISTRAL_API_KEY"] = os.environ["MISTRAL_API_KEY"].strip("'\" ")
 
-st.title("📚 RAG Book Assistant")
-st.write("Upload a PDF and ask questions from the document")
+st.set_page_config(page_title="RAG Book Assistant", page_icon="📚", layout="wide")
 
-uploaded_file = st.file_uploader("Upload a PDF book", type="pdf")
+st.title("📚 QuickRAG - Document QA Assistant")
+st.write("Upload a PDF document to create a clean vector database and ask precise questions.")
 
+# Sidebar for database management
+with st.sidebar:
+    st.header("⚙️ Database Management")
+    if st.button("🗑️ Clear Vector Database"):
+        if os.path.exists("chroma_db"):
+            try:
+                embeddings = MistralAIEmbeddings(model="mistral-embed")
+                vstore = Chroma(persist_directory="chroma_db", embedding_function=embeddings)
+                vstore.delete_collection()
+                st.success("Vector database collection cleared! Upload a new document to start fresh.")
+            except Exception as e:
+                st.warning(f"Cleared database state: {e}")
+            st.rerun()
+        else:
+            st.info("No active vector database found.")
+
+uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
 
 if uploaded_file:
-
-    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(uploaded_file.read())
         file_path = tmp_file.name
 
-    st.success("PDF uploaded successfully!")
+    st.success(f"📄 '{uploaded_file.name}' uploaded successfully!")
 
-    if st.button("Create Vector Database"):
-
-        with st.spinner("Processing document..."):
+    if st.button("🚀 Process Document & Build Vector DB"):
+        with st.spinner("Extracting text, chunking, and embedding with Mistral AI..."):
+            embeddings = MistralAIEmbeddings(model="mistral-embed")
+            
+            # Safely delete existing collection via API without corrupting SQLite handles
+            if os.path.exists("chroma_db"):
+                try:
+                    old_vstore = Chroma(persist_directory="chroma_db", embedding_function=embeddings)
+                    old_vstore.delete_collection()
+                except Exception:
+                    pass
 
             loader = PyPDFLoader(file_path)
             docs = loader.load()
 
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200
-            )
+            valid_docs = [doc for doc in docs if doc.page_content and doc.page_content.strip()]
 
-            chunks = splitter.split_documents(docs)
+            if not valid_docs:
+                st.error("No readable text found in the uploaded PDF!")
+            else:
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000,
+                    chunk_overlap=200
+                )
+                chunks = splitter.split_documents(valid_docs)
 
-            embeddings = OpenAIEmbeddings()
+                vectorstore = Chroma.from_documents(
+                    documents=chunks,
+                    embedding=embeddings,
+                    persist_directory="chroma_db"
+                )
+                st.success(f"✅ Vector database created successfully with {len(chunks)} chunks!")
 
-            vectorstore = Chroma.from_documents(
-                documents=chunks,
-                embedding=embeddings,
-                persist_directory="chroma_db"
-            )
-
-            vectorstore.persist()
-
-        st.success("Vector database created!")
-
-
+    try:
+        os.remove(file_path)
+    except Exception:
+        pass
 
 if os.path.exists("chroma_db"):
-
-    embeddings = OpenAIEmbeddings()
-
+    embeddings = MistralAIEmbeddings(model="mistral-embed")
     vectorstore = Chroma(
         persist_directory="chroma_db",
         embedding_function=embeddings
     )
 
     retriever = vectorstore.as_retriever(
-        search_type="mmr",
-        search_kwargs={
-            "k":4,
-            "fetch_k":10,
-            "lambda_mult":0.5
-        }
+        search_type="similarity",
+        search_kwargs={"k": 5}
     )
 
     llm = ChatMistralAI(model="mistral-small-2506")
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """You are a helpful AI assistant.
+    prompt = ChatPromptTemplate.from_messages([
+        (
+            "system",
+            """You are an expert technical AI assistant.
+Use ONLY the provided context below to answer the user's question accurately and concisely.
+If the answer is not present in the provided context, respond strictly with:
+"I could not find the answer in the uploaded document."
 
-Use ONLY the provided context to answer the question.
-
-If the answer is not present in the context,
-say: "I could not find the answer in the document."
-"""
-            ),
-            (
-                "human",
-                """Context:
+Context:
 {context}
-
-Question:
-{question}
 """
-            )
-        ]
-    )
+        ),
+        (
+            "human",
+            "Question: {question}"
+        )
+    ])
 
     st.divider()
-    st.subheader("Ask Questions From the Book")
+    st.subheader("💬 Ask Questions From Your Document")
 
-    query = st.text_input("Enter your question")
+    query = st.text_input("Enter your question about the uploaded document:")
 
     if query:
+        with st.spinner("Searching document & synthesizing answer..."):
+            docs = retriever.invoke(query)
 
-        docs = retriever.invoke(query)
+            if not docs:
+                st.warning("No matching context found in the document.")
+            else:
+                context = "\n\n---\n\n".join([doc.page_content for doc in docs])
 
-        context = "\n\n".join(
-            [doc.page_content for doc in docs]
-        )
+                final_prompt = prompt.invoke({
+                    "context": context,
+                    "question": query
+                })
 
-        final_prompt = prompt.invoke({
-            "context": context,
-            "question": query
-        })
+                response = llm.invoke(final_prompt)
 
-        response = llm.invoke(final_prompt)
+                st.write("### 🤖 AI Answer")
+                st.write(response.content)
 
-        st.write("### AI Answer")
-        st.write(response.content)
+                with st.expander("🔍 View Retrieved Context Chunks (Top Matches)"):
+                    for i, doc in enumerate(docs):
+                        page_num = doc.metadata.get("page", "N/A")
+                        st.markdown(f"**Chunk {i+1} (Page {page_num}):**")
+                        st.info(doc.page_content)

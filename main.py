@@ -1,11 +1,14 @@
 import os
+import io
+from typing import List
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from langchain_pinecone import PineconeVectorStore
 from langchain_mistralai import ChatMistralAI, MistralAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import pypdf
 
 load_dotenv()
 
@@ -55,7 +58,11 @@ Question:
 class ChatQuery(BaseModel):
     question: str
 
-# 5. Define the Live Web Endpoint
+# 5. Define API Endpoints
+@app.get("/")
+def read_root():
+    return {"message": "Cloud RAG Engine is active and running!"}
+
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatQuery):
     """
@@ -88,32 +95,6 @@ async def chat_endpoint(payload: ChatQuery):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
-# Root health-check endpoint for cloud platform deployment
-@app.get("/")
-def read_root():
-    return {"message": "Cloud RAG Engine is active and running!"}
-
-    # ... (Keep all your existing FastAPI app and endpoint code exactly the same)
-
-if __name__ == "__main__":
-    import uvicorn
-    # Render automatically injects an environment variable called PORT.
-    # We read that, fallback to 8000 if local, and bind to 0.0.0.0
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
-
-
-from fastapi import UploadFile, File, HTTPException
-import io
-
-# Make sure to install pypdf if handling PDFs: pip install pypdf
-# directly import your text splitter and pinecone vectorstore setup here 
-# (e.g., from langchain_text_splitters import RecursiveCharacterTextSplitter)
-
-from fastapi import UploadFile, File, HTTPException
-from typing import List
-import io
-
 @app.post("/api/upload")
 async def upload_documents(files: List[UploadFile] = File(...)):
     """
@@ -132,12 +113,11 @@ async def upload_documents(files: List[UploadFile] = File(...)):
             if file.filename.endswith(".txt"):
                 text = contents.decode("utf-8")
             elif file.filename.endswith(".pdf"):
-                import pypdf
                 pdf_reader = pypdf.PdfReader(io.BytesIO(contents))
                 for page in pdf_reader.pages:
                     text += page.extract_text() or ""
             else:
-                # Skip files that aren't supported instead of crashing the whole batch
+                # Skip unsupported files
                 continue
 
             if not text.strip():
@@ -152,8 +132,8 @@ async def upload_documents(files: List[UploadFile] = File(...)):
         if not all_chunks:
             raise HTTPException(status_code=400, detail="No readable text found in any of the uploaded files.")
 
-        # Upsert ALL combined chunks into your live cloud Pinecone Vectorstore instance at once
-        # vectorstore.add_texts(all_chunks)
+        # Upsert ALL combined chunks into your live cloud Pinecone Vectorstore instance
+        vectorstore.add_texts(all_chunks)
         
         return {
             "status": "success", 
@@ -164,3 +144,8 @@ async def upload_documents(files: List[UploadFile] = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bulk ingestion failed: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
