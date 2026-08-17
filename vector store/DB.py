@@ -82,3 +82,12 @@ for i in range(0, total_chunks, batch_size):
         time.sleep(3)
 
 print("--- Cloud Database successfully built and synchronized safely! ---")
+
+# 1. Clear previous vectors from Pinecone index so old document contexts are replaced cleanly
+try:
+    vectorstore.delete(delete_all=True)
+except Exception as delete_err:
+    print(f"[WARNING] Could not clear previous vectors: {delete_err}")
+
+# 2. Upsert newly uploaded document chunks into clean Pinecone index
+vectorstore.add_texts(all_chunks)
